@@ -1,0 +1,11 @@
+{
+    "aircraft": {
+        "id": "A12345",
+        "model": "Boeing 747",
+        "manufacturer": "Boeing",
+        "capacity": {
+            "seats": 416,
+            "cargo_volume": 150.4
+        }
+    }
+}
