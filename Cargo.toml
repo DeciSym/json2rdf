@@ -9,3 +9,4 @@ petgraph = "0.6.5"
 
 serde = "1.0.203"
 serde_json = "1.0.117"
+struson = "0.5.0"
