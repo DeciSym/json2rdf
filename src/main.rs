@@ -28,7 +28,7 @@ fn main() {
                 subject_stack.push_back(subject.clone());
 
                 for (key, val) in obj {
-                    property = Some(format!("https://decisym/json2rdf/#{}", key));
+                    property = Some(format!("http://decisym/data/json2rdf/#{}/", key));
                     process_value(&mut subject_stack, &property, val, &mut graph);
                 }
 
@@ -48,7 +48,12 @@ fn main() {
         }
     }
 
-    
+    for triple in graph.iter() {
+        println!(
+            "Subject: {}, Predicate: {}, Object: {}",
+            triple.subject, triple.predicate, triple.object
+        );
+    }
 }
 
 fn process_value(
@@ -59,7 +64,6 @@ fn process_value(
 ) {
     if let Some(last_subject) = subject_stack.clone().back() {
         if let Some(prop) = property {
-            // println!("Processing property: {}", prop);
             match value {
                 Value::Bool(b) => {
                     // println!("{},{},{}", subject_stack.back().unwrap(), prop, b);
@@ -100,13 +104,6 @@ fn process_value(
                     let subject = BlankNode::default();
                     subject_stack.push_back(subject);
 
-                    // println!(
-                    //     "{},{},{}",
-                    //     last_subject,
-                    //     prop,
-                    //     subject_stack.back().unwrap()
-                    // );
-
                     graph.insert(TripleRef::new(
                         subject_stack.back().unwrap(),
                         NamedNodeRef::new(prop.as_str()).unwrap(),
@@ -114,7 +111,8 @@ fn process_value(
                     ));
 
                     for (key, val) in obj {
-                        let nested_property = Some(format!("#{}", key));
+                        let nested_property =
+                            Some(format!("http://decisym/data/json2rdf/#{}/", key));
                         process_value(subject_stack, &nested_property, val, graph);
                     }
                     subject_stack.pop_back();
