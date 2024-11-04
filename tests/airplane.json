@@ -1,0 +1,35 @@
+{
+    "aircraft": {
+        "id": "A12345",
+        "model": "Boeing 747",
+        "manufacturer": "Boeing",
+        "capacity": {
+            "seats": 416,
+            "cargo_volume": 150.4
+        },
+        "flights": [
+            {
+                "flight_number": "BA123",
+                "departure": {
+                    "airport": "JFK",
+                    "time": "2024-10-29T10:00:00Z"
+                },
+                "arrival": {
+                    "airport": "LHR",
+                    "time": "2024-10-29T22:00:00Z"
+                }
+            },
+            {
+                "flight_number": "BA456",
+                "departure": {
+                    "airport": "LHR",
+                    "time": "2024-10-30T12:00:00Z"
+                },
+                "arrival": {
+                    "airport": "JFK",
+                    "time": "2024-10-30T20:00:00Z"
+                }
+            }
+        ]
+    }
+}

@@ -40,7 +40,7 @@ pub enum GraphOrMessage {
 /// ```rust
 /// use json2rdf::json_to_rdf;
 ///
-/// json_to_rdf(&"test/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &Some("output.nt".to_string()));
+/// json_to_rdf(&"tests/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &Some("output.nt".to_string()));
 /// ```
 
 pub fn json_to_rdf(
@@ -51,7 +51,7 @@ pub fn json_to_rdf(
     let rdf_namespace: String = if namespace.is_some() {
         namespace.clone().unwrap()
     } else {
-        "https://decisym/data".to_owned()
+        "https://decisym.ai/json2rdf/model".to_owned()
     };
 
     let file = File::open(file_path).unwrap();
