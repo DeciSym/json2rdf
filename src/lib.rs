@@ -12,18 +12,14 @@
 //! - Allows specifying a custom RDF namespace for generated predicates and objects.
 //! - Outputs the RDF data to a specified file or prints it to the console.
 
+use clap::Error;
 use oxrdf::vocab::xsd;
 use oxrdf::{BlankNode, Graph, Literal, NamedNodeRef, TripleRef};
 
 use serde_json::{Deserializer, Value};
 use std::collections::VecDeque;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Write};
-
-pub enum GraphOrMessage {
-    Graph(Graph),
-    Message(String),
-}
 
 /// Converts JSON data to RDF format.
 ///
@@ -47,7 +43,7 @@ pub fn json_to_rdf(
     file_path: &String,
     namespace: &Option<String>,
     output_file: &Option<String>,
-) -> Result<GraphOrMessage, String> {
+) -> Result<Graph, Error> {
     let rdf_namespace: String = if namespace.is_some() {
         namespace.clone().unwrap()
     } else {
@@ -109,14 +105,16 @@ pub fn json_to_rdf(
     }
 
     if let Some(output_path) = output_file {
-        let mut file = File::create(output_path).expect("Error creating file");
-        writeln!(file, "{}", graph).expect("Error writing to file");
-        Ok(GraphOrMessage::Message(format!(
-            "RDF created at: {}",
-            output_path
-        )))
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(output_path)
+            .expect("Error opening file");
+
+        writeln!(file, "{}", graph).expect("Error writing json2rdf data to file");
+        Ok(graph)
     } else {
-        Ok(GraphOrMessage::Graph(graph))
+        return Ok(graph);
     }
 }
 
