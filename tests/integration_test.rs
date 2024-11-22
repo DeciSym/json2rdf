@@ -6,8 +6,7 @@ fn test_graph_triple_count() {
 
     match triple_count_string {
         Ok(res) => {
-            println!("Graph created with {} triples", res.len());
-            assert_eq!(res.len(), 23)
+            assert_eq!(res.unwrap().len(), 23)
         }
         Err(e) => eprintln!("Error writing: {}", e),
     }

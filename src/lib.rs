@@ -43,7 +43,7 @@ pub fn json_to_rdf(
     file_path: &String,
     namespace: &Option<String>,
     output_file: &Option<String>,
-) -> Result<Graph, Error> {
+) -> Result<Option<Graph>, Error> {
     let rdf_namespace: String = if namespace.is_some() {
         namespace.clone().unwrap()
     } else {
@@ -112,9 +112,9 @@ pub fn json_to_rdf(
             .expect("Error opening file");
 
         writeln!(file, "{}", graph).expect("Error writing json2rdf data to file");
-        Ok(graph)
+        Ok(None)
     } else {
-        return Ok(graph);
+        return Ok(Some(graph));
     }
 }
 
