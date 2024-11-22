@@ -21,7 +21,7 @@
 //! ```
 //! This will take `data.json`, apply the specified namespace, and save the RDF output in `output.nt`.
 use clap::{Parser, Subcommand};
-mod lib;
+use json2rdf::*;
 
 /// Command-line interface for JSON2RDF Converter
 ///
@@ -73,21 +73,10 @@ fn main() {
             namespace,
             json_files,
             output_file,
-        }) => {
-            match lib::json_to_rdf(json_files, namespace, output_file) {
-                Ok(res) => match res {
-                    lib::GraphOrMessage::Graph(graph) => {
-                        // Handle the case where the function returns a Graph
-                        println!("Graph created with {} triples", graph.len());
-                    }
-                    lib::GraphOrMessage::Message(message) => {
-                        // Handle the case where the function returns a success message
-                        println!("{}", message);
-                    }
-                },
-                Err(e) => eprintln!("Error writing: {}", e),
-            }
-        }
+        }) => match json_to_rdf(json_files, namespace, output_file) {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error writing: {}", e),
+        },
         None => {}
     }
 }
