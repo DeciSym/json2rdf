@@ -162,18 +162,21 @@ fn process_value(
                     ));
                 }
                 Value::Number(num) => {
-                    let literal = if let Some(int) = num.as_i64() {
-                        int.to_string()
-                    } else if let Some(float) = num.as_f64() {
-                        float.to_string()
+                    if num.as_i64().is_some() {
+                        graph.insert(TripleRef::new(
+                            subject_stack.back().unwrap(),
+                            NamedNodeRef::new(prop.as_str()).unwrap(),
+                            &Literal::new_typed_literal(num.to_string(), xsd::INT),
+                        ));
+                    } else if num.as_f64().is_some() {
+                        graph.insert(TripleRef::new(
+                            subject_stack.back().unwrap(),
+                            NamedNodeRef::new(prop.as_str()).unwrap(),
+                            &Literal::new_typed_literal(num.to_string(), xsd::FLOAT),
+                        ));
                     } else {
                         return;
-                    };
-                    graph.insert(TripleRef::new(
-                        subject_stack.back().unwrap(),
-                        NamedNodeRef::new(prop.as_str()).unwrap(),
-                        &Literal::new_typed_literal(literal, xsd::INT),
-                    ));
+                    }
                 }
                 Value::String(s) => {
                     graph.insert(TripleRef::new(
@@ -197,7 +200,7 @@ fn process_value(
 
                     for (key, val) in obj {
                         let nested_property: Option<String> =
-                            Some(format!("{}/{}/", namespace, key));
+                            Some(format!("{}/{}", namespace, key));
                         process_value(subject_stack, &nested_property, val, graph, namespace);
                     }
                     subject_stack.pop_back();
