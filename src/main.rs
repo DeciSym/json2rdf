@@ -1,3 +1,9 @@
+// Copyright (c) 2024-2025, DeciSym, LLC
+// Licensed under either of:
+// - Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
+// - BSD 3-Clause License (https://opensource.org/licenses/BSD-3-Clause)
+// at your option.
+
 //! # JSON2RDF Converter
 //!
 //! This is a Rust-based tool that converts JSON data into RDF format. It uses the `serde_json` crate

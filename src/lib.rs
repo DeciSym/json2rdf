@@ -1,3 +1,9 @@
+// Copyright (c) 2024-2025, DeciSym, LLC
+// Licensed under either of:
+// - Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
+// - BSD 3-Clause License (https://opensource.org/licenses/BSD-3-Clause)
+// at your option.
+
 //! # JSON2RDF Converter Library
 //!
 //! This library provides functionality for converting JSON data into RDF format.
@@ -38,7 +44,6 @@ use std::io::{BufReader, Write};
 ///
 /// json_to_rdf(&"tests/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &Some("output.nt".to_string()));
 /// ```
-
 pub fn json_to_rdf(
     file_path: &String,
     namespace: &Option<String>,
@@ -114,7 +119,7 @@ pub fn json_to_rdf(
         writeln!(file, "{}", graph).expect("Error writing json2rdf data to file");
         Ok(None)
     } else {
-        return Ok(Some(graph));
+        Ok(Some(graph))
     }
 }
 
@@ -143,7 +148,6 @@ pub fn json_to_rdf(
 /// - **String**: Converts to `xsd:string` literal.
 /// - **Boolean**: Converts to `xsd:boolean` literal.
 /// - **Number**: Converts to `xsd:int` or `xsd:float` literal based on value type.
-
 fn process_value(
     subject_stack: &mut VecDeque<BlankNode>,
     property: &Option<String>,

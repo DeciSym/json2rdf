@@ -1,14 +1,19 @@
 [package]
 name = "json2rdf"
-version = "0.1.1"
+version = "0.1.0"
+authors = ["bharath181 <bharathselvaraj18@gmail.com>", "Greg Hanson <g.isaac.hanson@gmail.com>"]
 edition = "2021"
+license = "BSD-3-Clause OR Apache-2.0"
+description = "Library for converting a JSON file to N-Triple RDF"
+repository = "https://github.com/DeciSym/json2rdf"
+readme = "README.md"
+keywords = ["json", "rdf", "n-triples", "semantic-web", "converter", "parser"]
+categories = ["command-line-utilities", "encoding", "parser-implementations", "science", "web-programming"]
 
 [dependencies]
-clap = { version = "4.5.20", features = ["derive"] }
-log = "0.4.22"
-oxrdf = "0.1.7"
+clap = { version = "4.5.30", features = ["derive"] }
+oxrdf = "0.2.4"
+serde_json = "1.0.139"
 
-
-serde = "1.0.203"
-serde_json = "1.0.117"
-uuid = { version = "1", features = ["v4"] }
+[dev-dependencies]
+oxrdfio = "0.1.6"
