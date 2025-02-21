@@ -7,7 +7,7 @@ license = "BSD-3-Clause OR Apache-2.0"
 description = "Library for converting a JSON file to N-Triple RDF"
 repository = "https://github.com/DeciSym/json2rdf"
 readme = "README.md"
-keywords = ["json", "rdf", "n-triples", "semantic-web", "converter", "parser"]
+keywords = ["json", "rdf", "semantic-web", "converter", "parser"]
 categories = ["command-line-utilities", "encoding", "parser-implementations", "science", "web-programming"]
 
 [dependencies]
