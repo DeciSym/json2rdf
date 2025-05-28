@@ -155,7 +155,6 @@ fn process_value(
     graph: &mut Graph,
     namespace: &String,
 ) {
-
     let ns = if namespace.ends_with("/") {
         namespace
     } else {
@@ -210,8 +209,7 @@ fn process_value(
                     ));
 
                     for (key, val) in obj {
-                        let nested_property: Option<String> =
-                            Some(format!("{}{}", ns, key));
+                        let nested_property: Option<String> = Some(format!("{}{}", ns, key));
                         process_value(subject_stack, &nested_property, val, graph, ns);
                     }
                     subject_stack.pop_back();
