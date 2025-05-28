@@ -155,6 +155,12 @@ fn process_value(
     graph: &mut Graph,
     namespace: &String,
 ) {
+    let ns = if namespace.ends_with("/") {
+        namespace
+    } else {
+        &([namespace, "/"].join(""))
+    };
+
     if let Some(last_subject) = subject_stack.clone().back() {
         if let Some(prop) = property {
             match value {
@@ -203,15 +209,14 @@ fn process_value(
                     ));
 
                     for (key, val) in obj {
-                        let nested_property: Option<String> =
-                            Some(format!("{}/{}", namespace, key));
-                        process_value(subject_stack, &nested_property, val, graph, namespace);
+                        let nested_property: Option<String> = Some(format!("{}{}", ns, key));
+                        process_value(subject_stack, &nested_property, val, graph, ns);
                     }
                     subject_stack.pop_back();
                 }
                 Value::Array(arr) => {
                     for val in arr {
-                        process_value(subject_stack, property, val, graph, namespace);
+                        process_value(subject_stack, property, val, graph, ns);
                     }
                 }
             }
