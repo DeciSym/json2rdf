@@ -23,7 +23,7 @@ use oxrdf::{BlankNode, Graph, IriParseError, Literal, NamedNodeRef, TripleRef};
 
 use serde_json::{Deserializer, Value};
 use std::collections::VecDeque;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufReader, Write};
 use thiserror::Error;
 
@@ -45,6 +45,10 @@ pub enum Json2RdfError {
         #[source]
         source: IriParseError,
     },
+
+    /// A root-level JSON value has no predicate context and cannot be converted to a triple.
+    #[error("unsupported root-level JSON {kind}; root must be an object or array")]
+    UnsupportedRootValue { kind: &'static str },
 }
 
 /// Converts JSON data to RDF format.
@@ -77,11 +81,15 @@ pub fn json_to_rdf(
     namespace: &Option<String>,
     output_file: &Option<String>,
 ) -> Result<Option<Graph>, Json2RdfError> {
-    let rdf_namespace: String = if namespace.is_some() {
+    let mut prefix: String = if namespace.is_some() {
         namespace.clone().unwrap()
     } else {
         "https://decisym.ai/json2rdf/model".to_owned()
     };
+    // Respect hash (`#`), slash (`/`), and colon (`:`) terminators; otherwise default to `/`.
+    if !prefix.ends_with(['#', '/', ':']) {
+        prefix.push('/');
+    }
 
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
@@ -90,61 +98,54 @@ pub fn json_to_rdf(
     let mut graph = Graph::default(); // oxrdf Graph object
 
     let mut subject_stack: VecDeque<BlankNode> = VecDeque::new();
-    let mut property: Option<String> = None;
 
     for value in stream {
-        let value = value?;
-        match value {
-            Value::Object(obj) => {
-                let subject = BlankNode::default(); // Create a new blank node
-                subject_stack.push_back(subject);
-
-                for (key, val) in obj {
-                    property = Some(format!("{}/{}", rdf_namespace, key));
-                    process_value(
-                        &mut subject_stack,
-                        &property,
-                        val,
-                        &mut graph,
-                        &rdf_namespace,
-                    )?;
-                }
-
-                subject_stack.pop_back();
-            }
-            Value::Array(arr) => {
-                for val in arr {
-                    process_value(
-                        &mut subject_stack,
-                        &property,
-                        val,
-                        &mut graph,
-                        &rdf_namespace,
-                    )?;
-                }
-            }
-            other => {
-                process_value(
-                    &mut subject_stack,
-                    &property,
-                    other,
-                    &mut graph,
-                    &rdf_namespace,
-                )?;
-            }
-        }
+        process_top_level(&mut subject_stack, value?, &mut graph, &prefix)?;
     }
 
     if let Some(output_path) = output_file {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(output_path)?;
-
+        let mut file = File::create(output_path)?;
         writeln!(file, "{}", graph)?;
         Ok(None)
     } else {
         Ok(Some(graph))
+    }
+}
+
+/// Processes a single top-level JSON value from the input stream.
+///
+/// Each top-level value is handled independently: streamed values (NDJSON) do not
+/// share predicate state with each other. Root-level primitives have no predicate
+/// context and are rejected with [`Json2RdfError::UnsupportedRootValue`].
+fn process_top_level(
+    subject_stack: &mut VecDeque<BlankNode>,
+    value: Value,
+    graph: &mut Graph,
+    prefix: &String,
+) -> Result<(), Json2RdfError> {
+    match value {
+        Value::Object(obj) => {
+            let subject = BlankNode::default();
+            subject_stack.push_back(subject);
+
+            for (key, val) in obj {
+                let property = Some(format!("{}{}", prefix, key));
+                process_value(subject_stack, &property, val, graph, prefix)?;
+            }
+
+            subject_stack.pop_back();
+            Ok(())
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                process_top_level(subject_stack, item, graph, prefix)?;
+            }
+            Ok(())
+        }
+        Value::Bool(_) => Err(Json2RdfError::UnsupportedRootValue { kind: "boolean" }),
+        Value::Number(_) => Err(Json2RdfError::UnsupportedRootValue { kind: "number" }),
+        Value::String(_) => Err(Json2RdfError::UnsupportedRootValue { kind: "string" }),
+        Value::Null => Err(Json2RdfError::UnsupportedRootValue { kind: "null" }),
     }
 }
 
@@ -165,7 +166,8 @@ pub fn json_to_rdf(
 /// - `property`: RDF predicate (property) associated with the JSON value.
 /// - `value`: JSON value to process.
 /// - `graph`: RDF graph where triples are added.
-/// - `namespace`: Namespace for generating predicate URIs.
+/// - `prefix`: Fully-prepared namespace prefix (already terminated with `#`, `/`, or `:`)
+///   used to build predicate IRIs by direct concatenation with each JSON key.
 ///
 /// # JSON Type to RDF Conversion
 /// - **Object**: Creates a blank node and recursively processes key-value pairs.
@@ -178,14 +180,8 @@ fn process_value(
     property: &Option<String>,
     value: Value,
     graph: &mut Graph,
-    namespace: &String,
+    prefix: &String,
 ) -> Result<(), Json2RdfError> {
-    let ns = if namespace.ends_with("/") {
-        namespace
-    } else {
-        &([namespace, "/"].join(""))
-    };
-
     let Some(last_subject) = subject_stack.back().cloned() else {
         return Ok(());
     };
@@ -233,14 +229,14 @@ fn process_value(
             subject_stack.push_back(new_subject);
 
             for (key, val) in obj {
-                let nested_property: Option<String> = Some(format!("{}{}", ns, key));
-                process_value(subject_stack, &nested_property, val, graph, ns)?;
+                let nested_property: Option<String> = Some(format!("{}{}", prefix, key));
+                process_value(subject_stack, &nested_property, val, graph, prefix)?;
             }
             subject_stack.pop_back();
         }
         Value::Array(arr) => {
             for val in arr {
-                process_value(subject_stack, property, val, graph, ns)?;
+                process_value(subject_stack, property, val, graph, prefix)?;
             }
         }
     }
