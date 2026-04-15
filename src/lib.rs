@@ -18,14 +18,34 @@
 //! - Allows specifying a custom RDF namespace for generated predicates and objects.
 //! - Outputs the RDF data to a specified file or prints it to the console.
 
-use clap::Error;
 use oxrdf::vocab::xsd;
-use oxrdf::{BlankNode, Graph, Literal, NamedNodeRef, TripleRef};
+use oxrdf::{BlankNode, Graph, IriParseError, Literal, NamedNodeRef, TripleRef};
 
 use serde_json::{Deserializer, Value};
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Write};
+use thiserror::Error;
+
+/// Errors that can occur while converting JSON to RDF.
+#[derive(Debug, Error)]
+pub enum Json2RdfError {
+    /// Failure opening, reading, or writing a file.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// Failure parsing the input JSON.
+    #[error("JSON parse error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// A JSON key produced a string that is not a valid IRI.
+    #[error("invalid IRI {iri:?} generated from JSON key: {source}")]
+    InvalidIri {
+        iri: String,
+        #[source]
+        source: IriParseError,
+    },
+}
 
 /// Converts JSON data to RDF format.
 ///
@@ -38,24 +58,32 @@ use std::io::{BufReader, Write};
 /// - `namespace`: Optional custom namespace for RDF predicates.
 /// - `output_file`: Optional output file path for writing RDF data.
 ///
+/// # Errors
+/// Returns [`Json2RdfError`] if the input file cannot be read, the JSON cannot be parsed,
+/// the output file cannot be written, or a JSON key produces an invalid IRI.
+///
 /// # Example
 /// ```rust
 /// use json2rdf::json_to_rdf;
 ///
-/// json_to_rdf(&"tests/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &Some("output.nt".to_string()));
+/// json_to_rdf(
+///     &"tests/airplane.json".to_string(),
+///     &Some("http://example.com/ns#".to_string()),
+///     &Some("output.nt".to_string()),
+/// ).expect("conversion failed");
 /// ```
 pub fn json_to_rdf(
     file_path: &String,
     namespace: &Option<String>,
     output_file: &Option<String>,
-) -> Result<Option<Graph>, Error> {
+) -> Result<Option<Graph>, Json2RdfError> {
     let rdf_namespace: String = if namespace.is_some() {
         namespace.clone().unwrap()
     } else {
         "https://decisym.ai/json2rdf/model".to_owned()
     };
 
-    let file = File::open(file_path).unwrap();
+    let file = File::open(file_path)?;
     let reader = BufReader::new(file);
     let stream = Deserializer::from_reader(reader).into_iter::<Value>();
 
@@ -65,10 +93,11 @@ pub fn json_to_rdf(
     let mut property: Option<String> = None;
 
     for value in stream {
+        let value = value?;
         match value {
-            Ok(Value::Object(obj)) => {
+            Value::Object(obj) => {
                 let subject = BlankNode::default(); // Create a new blank node
-                subject_stack.push_back(subject.clone());
+                subject_stack.push_back(subject);
 
                 for (key, val) in obj {
                     property = Some(format!("{}/{}", rdf_namespace, key));
@@ -78,33 +107,30 @@ pub fn json_to_rdf(
                         val,
                         &mut graph,
                         &rdf_namespace,
-                    );
+                    )?;
                 }
 
                 subject_stack.pop_back();
             }
-            Ok(Value::Array(arr)) => {
+            Value::Array(arr) => {
                 for val in arr {
                     process_value(
                         &mut subject_stack,
                         &property,
                         val,
                         &mut graph,
-                        &rdf_namespace.clone(),
-                    );
+                        &rdf_namespace,
+                    )?;
                 }
             }
-            Ok(other) => {
+            other => {
                 process_value(
                     &mut subject_stack,
                     &property,
                     other,
                     &mut graph,
-                    &rdf_namespace.clone(),
-                );
-            }
-            Err(e) => {
-                eprintln!("Error parsing JSON: {}", e);
+                    &rdf_namespace,
+                )?;
             }
         }
     }
@@ -113,10 +139,9 @@ pub fn json_to_rdf(
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(output_path)
-            .expect("Error opening file");
+            .open(output_path)?;
 
-        writeln!(file, "{}", graph).expect("Error writing json2rdf data to file");
+        writeln!(file, "{}", graph)?;
         Ok(None)
     } else {
         Ok(Some(graph))
@@ -147,77 +172,77 @@ pub fn json_to_rdf(
 /// - **Array**: Iterates over elements and processes each as a separate value.
 /// - **String**: Converts to `xsd:string` literal.
 /// - **Boolean**: Converts to `xsd:boolean` literal.
-/// - **Number**: Converts to `xsd:int` or `xsd:float` literal based on value type.
+/// - **Number**: Converts to `xsd:integer` for whole numbers, `xsd:double` for floating-point values.
 fn process_value(
     subject_stack: &mut VecDeque<BlankNode>,
     property: &Option<String>,
     value: Value,
     graph: &mut Graph,
     namespace: &String,
-) {
+) -> Result<(), Json2RdfError> {
     let ns = if namespace.ends_with("/") {
         namespace
     } else {
         &([namespace, "/"].join(""))
     };
 
-    if let Some(last_subject) = subject_stack.clone().back() {
-        if let Some(prop) = property {
-            match value {
-                Value::Bool(b) => {
-                    graph.insert(TripleRef::new(
-                        subject_stack.back().unwrap(),
-                        NamedNodeRef::new(prop.as_str()).unwrap(),
-                        &Literal::new_typed_literal(b.to_string(), xsd::BOOLEAN),
-                    ));
-                }
-                Value::Number(num) => {
-                    if num.as_i64().is_some() {
-                        graph.insert(TripleRef::new(
-                            subject_stack.back().unwrap(),
-                            NamedNodeRef::new(prop.as_str()).unwrap(),
-                            &Literal::new_typed_literal(num.to_string(), xsd::INT),
-                        ));
-                    } else if num.as_f64().is_some() {
-                        graph.insert(TripleRef::new(
-                            subject_stack.back().unwrap(),
-                            NamedNodeRef::new(prop.as_str()).unwrap(),
-                            &Literal::new_typed_literal(num.to_string(), xsd::FLOAT),
-                        ));
-                    }
-                }
-                Value::String(s) => {
-                    graph.insert(TripleRef::new(
-                        subject_stack.back().unwrap(),
-                        NamedNodeRef::new(prop.as_str()).unwrap(),
-                        &Literal::new_typed_literal(s, xsd::STRING),
-                    ));
-                }
-                Value::Null => {
-                    //println!("Null value");
-                }
-                Value::Object(obj) => {
-                    let subject = BlankNode::default();
-                    subject_stack.push_back(subject);
+    let Some(last_subject) = subject_stack.back().cloned() else {
+        return Ok(());
+    };
+    let Some(prop) = property else {
+        return Ok(());
+    };
 
-                    graph.insert(TripleRef::new(
-                        last_subject,
-                        NamedNodeRef::new(prop.as_str()).unwrap(),
-                        subject_stack.back().unwrap(),
-                    ));
+    let predicate =
+        NamedNodeRef::new(prop.as_str()).map_err(|source| Json2RdfError::InvalidIri {
+            iri: prop.clone(),
+            source,
+        })?;
 
-                    for (key, val) in obj {
-                        let nested_property: Option<String> = Some(format!("{}{}", ns, key));
-                        process_value(subject_stack, &nested_property, val, graph, ns);
-                    }
-                    subject_stack.pop_back();
-                }
-                Value::Array(arr) => {
-                    for val in arr {
-                        process_value(subject_stack, property, val, graph, ns);
-                    }
-                }
+    match value {
+        Value::Bool(b) => {
+            graph.insert(TripleRef::new(
+                &last_subject,
+                predicate,
+                &Literal::new_typed_literal(b.to_string(), xsd::BOOLEAN),
+            ));
+        }
+        Value::Number(num) => {
+            let datatype = if num.is_i64() || num.is_u64() {
+                xsd::INTEGER
+            } else {
+                xsd::DOUBLE
+            };
+            graph.insert(TripleRef::new(
+                &last_subject,
+                predicate,
+                &Literal::new_typed_literal(num.to_string(), datatype),
+            ));
+        }
+        Value::String(s) => {
+            graph.insert(TripleRef::new(
+                &last_subject,
+                predicate,
+                &Literal::new_typed_literal(s, xsd::STRING),
+            ));
+        }
+        Value::Null => {}
+        Value::Object(obj) => {
+            let new_subject = BlankNode::default();
+            graph.insert(TripleRef::new(&last_subject, predicate, &new_subject));
+            subject_stack.push_back(new_subject);
+
+            for (key, val) in obj {
+                let nested_property: Option<String> = Some(format!("{}{}", ns, key));
+                process_value(subject_stack, &nested_property, val, graph, ns)?;
+            }
+            subject_stack.pop_back();
+        }
+        Value::Array(arr) => {
+            for val in arr {
+                process_value(subject_stack, property, val, graph, ns)?;
             }
         }
     }
+    Ok(())
 }

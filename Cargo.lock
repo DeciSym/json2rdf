@@ -148,6 +148,7 @@ dependencies = [
  "oxrdf",
  "oxrdfio",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

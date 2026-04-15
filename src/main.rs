@@ -79,10 +79,12 @@ fn main() {
             namespace,
             json_files,
             output_file,
-        }) => match json_to_rdf(json_files, namespace, output_file) {
-            Ok(_) => {}
-            Err(e) => eprintln!("Error writing: {}", e),
-        },
+        }) => {
+            if let Err(e) = json_to_rdf(json_files, namespace, output_file) {
+                eprintln!("json2rdf: {}", e);
+                std::process::exit(1);
+            }
+        }
         None => {}
     }
 }
