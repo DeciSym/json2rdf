@@ -184,8 +184,6 @@ fn process_value(
                             NamedNodeRef::new(prop.as_str()).unwrap(),
                             &Literal::new_typed_literal(num.to_string(), xsd::FLOAT),
                         ));
-                    } else {
-                        return;
                     }
                 }
                 Value::String(s) => {
