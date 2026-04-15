@@ -5,7 +5,7 @@
 # at your option.
 
 lint:
-	cargo install  cargo-machete
+	@command -v cargo-machete >/dev/null 2>&1 || cargo install cargo-machete
 	cargo fmt --check
 	cargo machete
 	cargo clippy --benches --tests --bins --no-deps --all-features

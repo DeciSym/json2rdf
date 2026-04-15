@@ -22,7 +22,6 @@ use oxrdf::vocab::xsd;
 use oxrdf::{BlankNode, Graph, IriParseError, Literal, NamedNodeRef, TripleRef};
 
 use serde_json::{Deserializer, Value};
-use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use thiserror::Error;
@@ -58,49 +57,50 @@ pub enum Json2RdfError {
 /// an output file for saving the generated RDF data.
 ///
 /// # Arguments
-/// - `file_path`: Path to the JSON file.
+/// - `file_paths`: One or more paths to input JSON files. All files are merged into a single graph.
 /// - `namespace`: Optional custom namespace for RDF predicates.
 /// - `output_file`: Optional output file path for writing RDF data.
 ///
 /// # Errors
-/// Returns [`Json2RdfError`] if the input file cannot be read, the JSON cannot be parsed,
+/// Returns [`Json2RdfError`] if any input file cannot be read, the JSON cannot be parsed,
 /// the output file cannot be written, or a JSON key produces an invalid IRI.
 ///
 /// # Example
 /// ```rust
 /// use json2rdf::json_to_rdf;
 ///
-/// json_to_rdf(
-///     &"tests/airplane.json".to_string(),
-///     &Some("http://example.com/ns#".to_string()),
-///     &Some("output.nt".to_string()),
-/// ).expect("conversion failed");
+/// let graph = json_to_rdf(
+///     &["tests/airplane.json"],
+///     Some("http://example.com/ns#"),
+///     None,
+/// )
+/// .expect("conversion failed")
+/// .expect("expected a graph");
+/// assert!(!graph.is_empty());
 /// ```
 pub fn json_to_rdf(
-    file_path: &String,
-    namespace: &Option<String>,
-    output_file: &Option<String>,
+    file_paths: &[&str],
+    namespace: Option<&str>,
+    output_file: Option<&str>,
 ) -> Result<Option<Graph>, Json2RdfError> {
-    let mut prefix: String = if namespace.is_some() {
-        namespace.clone().unwrap()
-    } else {
-        "https://decisym.ai/json2rdf/model".to_owned()
-    };
+    let mut prefix: String = namespace
+        .map(str::to_owned)
+        .unwrap_or_else(|| "https://decisym.ai/json2rdf/model".to_owned());
     // Respect hash (`#`), slash (`/`), and colon (`:`) terminators; otherwise default to `/`.
     if !prefix.ends_with(['#', '/', ':']) {
         prefix.push('/');
     }
 
-    let file = File::open(file_path)?;
-    let reader = BufReader::new(file);
-    let stream = Deserializer::from_reader(reader).into_iter::<Value>();
-
     let mut graph = Graph::default(); // oxrdf Graph object
+    let mut subject_stack: Vec<BlankNode> = Vec::new();
 
-    let mut subject_stack: VecDeque<BlankNode> = VecDeque::new();
-
-    for value in stream {
-        process_top_level(&mut subject_stack, value?, &mut graph, &prefix)?;
+    for path in file_paths {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let stream = Deserializer::from_reader(reader).into_iter::<Value>();
+        for value in stream {
+            process_top_level(&mut subject_stack, value?, &mut graph, &prefix)?;
+        }
     }
 
     if let Some(output_path) = output_file {
@@ -118,22 +118,22 @@ pub fn json_to_rdf(
 /// share predicate state with each other. Root-level primitives have no predicate
 /// context and are rejected with [`Json2RdfError::UnsupportedRootValue`].
 fn process_top_level(
-    subject_stack: &mut VecDeque<BlankNode>,
+    subject_stack: &mut Vec<BlankNode>,
     value: Value,
     graph: &mut Graph,
-    prefix: &String,
+    prefix: &str,
 ) -> Result<(), Json2RdfError> {
     match value {
         Value::Object(obj) => {
             let subject = BlankNode::default();
-            subject_stack.push_back(subject);
+            subject_stack.push(subject);
 
             for (key, val) in obj {
                 let property = Some(format!("{}{}", prefix, key));
                 process_value(subject_stack, &property, val, graph, prefix)?;
             }
 
-            subject_stack.pop_back();
+            subject_stack.pop();
             Ok(())
         }
         Value::Array(arr) => {
@@ -176,13 +176,13 @@ fn process_top_level(
 /// - **Boolean**: Converts to `xsd:boolean` literal.
 /// - **Number**: Converts to `xsd:integer` for whole numbers, `xsd:double` for floating-point values.
 fn process_value(
-    subject_stack: &mut VecDeque<BlankNode>,
+    subject_stack: &mut Vec<BlankNode>,
     property: &Option<String>,
     value: Value,
     graph: &mut Graph,
-    prefix: &String,
+    prefix: &str,
 ) -> Result<(), Json2RdfError> {
-    let Some(last_subject) = subject_stack.back().cloned() else {
+    let Some(last_subject) = subject_stack.last().cloned() else {
         return Ok(());
     };
     let Some(prop) = property else {
@@ -226,13 +226,13 @@ fn process_value(
         Value::Object(obj) => {
             let new_subject = BlankNode::default();
             graph.insert(TripleRef::new(&last_subject, predicate, &new_subject));
-            subject_stack.push_back(new_subject);
+            subject_stack.push(new_subject);
 
             for (key, val) in obj {
                 let nested_property: Option<String> = Some(format!("{}{}", prefix, key));
                 process_value(subject_stack, &nested_property, val, graph, prefix)?;
             }
-            subject_stack.pop_back();
+            subject_stack.pop();
         }
         Value::Array(arr) => {
             for val in arr {

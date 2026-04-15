@@ -42,10 +42,13 @@ The conversion functionality can also be called directly in Rust. The library su
 use json2rdf::json_to_rdf;
 
 // capture conversion results to file
-let results = json_to_rdf(&"tests/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &Some("output.nt".to_string()));
+let results = json_to_rdf(&["tests/airplane.json"], Some("http://example.com/ns#"), Some("output.nt"));
 
 // capture conversion results to an oxrdf::Graph
-let results = json_to_rdf(&"tests/airplane.json".to_string(), &Some("http://example.com/ns#".to_string()), &None);
+let results = json_to_rdf(&["tests/airplane.json"], Some("http://example.com/ns#"), None);
+
+// multiple input files are merged into a single graph
+let results = json_to_rdf(&["a.json", "b.json"], Some("http://example.com/ns#"), None);
 ```
 
 ## License

@@ -59,8 +59,9 @@ enum Commands {
         /// Path to input JSON file(s).
         ///
         /// Provide the path to one or more JSON files that will be parsed and converted.
-        #[arg(short, long)]
-        json_files: String,
+        /// All files are merged into a single RDF graph.
+        #[arg(short, long, required = true, num_args = 1..)]
+        json_files: Vec<String>,
 
         /// Path to output file.
         ///
@@ -80,7 +81,8 @@ fn main() {
             json_files,
             output_file,
         }) => {
-            if let Err(e) = json_to_rdf(json_files, namespace, output_file) {
+            let paths: Vec<&str> = json_files.iter().map(String::as_str).collect();
+            if let Err(e) = json_to_rdf(&paths, namespace.as_deref(), output_file.as_deref()) {
                 eprintln!("json2rdf: {}", e);
                 std::process::exit(1);
             }
